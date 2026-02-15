@@ -1,0 +1,80 @@
+name: Scrape Deshrupantor Articles
+
+on:
+  schedule:
+    # Run daily at 6:00 AM Bangladesh Time (BD is UTC+6, so 00:00 UTC = 6:00 AM BD)
+    - cron: '0 0 * * *'
+  
+  # Allow manual trigger
+  workflow_dispatch:
+  
+  # Run on push to test
+  push:
+    branches: [ main ]
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    services:
+      flaresolverr:
+        image: ghcr.io/flaresolverr/flaresolverr:latest
+        ports:
+          - 8191:8191
+        env:
+          LOG_LEVEL: info
+          LOG_HTML: false
+          CAPTCHA_SOLVER: none
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Wait for FlareSolverr to be ready
+      run: |
+        echo "Waiting for FlareSolverr to start..."
+        for i in {1..30}; do
+          if curl -s http://localhost:8191/v1 > /dev/null; then
+            echo "FlareSolverr is ready!"
+            break
+          fi
+          echo "Waiting... ($i/30)"
+          sleep 2
+        done
+    
+    - name: Run scraper
+      run: |
+        python scraper.py
+      env:
+        FLARESOLVERR_URL: http://localhost:8191/v1
+    
+    - name: Configure Git
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+    
+    - name: Commit and push if changed
+      run: |
+        git add articles.xml
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Update articles - $(date -u '+%Y-%m-%d %H:%M:%S UTC') [6 AM BD Time]"
+          git push
+        fi

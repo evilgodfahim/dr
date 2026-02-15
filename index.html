@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>দেশরূপান্তর আর্কাইভ | Deshrupantor Archive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #2d3748;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header .subtitle {
+            color: #718096;
+            font-size: 1.1em;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .stat-box .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .stat-box .value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 10px 20px;
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95em;
+            font-weight: 500;
+        }
+
+        .filter-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .articles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .article-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .article-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 5px;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .article-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+        }
+
+        .article-card .title {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 15px;
+            line-height: 1.5;
+            text-decoration: none;
+            display: block;
+        }
+
+        .article-card .title:hover {
+            color: #667eea;
+        }
+
+        .article-card .meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85em;
+            color: #718096;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .article-card .date {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .article-card .link-btn {
+            padding: 6px 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9em;
+            transition: opacity 0.3s;
+        }
+
+        .article-card .link-btn:hover {
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f4f6;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            color: #718096;
+        }
+
+        .no-results h2 {
+            font-size: 1.5em;
+            margin-bottom: 10px;
+            color: #2d3748;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            margin-top: 40px;
+            opacity: 0.9;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .stats {
+                gap: 15px;
+            }
+
+            .articles-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📰 দেশরূপান্তর আর্কাইভ</h1>
+            <p class="subtitle">Deshrupantor News Archive</p>
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="label">মোট নিবন্ধ</div>
+                    <div class="value" id="totalCount">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">সর্বশেষ আপডেট</div>
+                    <div class="value" id="lastUpdate">-</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">প্রদর্শিত</div>
+                    <div class="value" id="displayedCount">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 খবর খুঁজুন... (Search articles...)">
+            </div>
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">সব (All)</button>
+                <button class="filter-btn" data-filter="today">আজকের (Today)</button>
+                <button class="filter-btn" data-filter="week">এই সপ্তাহ (This Week)</button>
+                <button class="filter-btn" data-filter="month">এই মাস (This Month)</button>
+            </div>
+        </div>
+
+        <div id="content">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>নিবন্ধ লোড হচ্ছে... Loading articles...</p>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>
+                Data scraped from <a href="https://www.deshrupantor.com/printversion" target="_blank">Deshrupantor</a> | 
+                Updated daily at 6:00 AM BD Time | 
+                <a href="https://github.com" target="_blank">View Source on GitHub</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let allArticles = [];
+        let filteredArticles = [];
+        let currentFilter = 'all';
+
+        // Load and parse XML
+        async function loadArticles() {
+            try {
+                const response = await fetch('articles.xml');
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+
+                // Check for parsing errors
+                const parseError = xmlDoc.querySelector('parsererror');
+                if (parseError) {
+                    throw new Error('XML parsing error');
+                }
+
+                // Get metadata
+                const articlesNode = xmlDoc.querySelector('articles');
+                const lastUpdate = articlesNode?.getAttribute('last_updated') || '';
+                const totalCount = articlesNode?.getAttribute('total_count') || '0';
+
+                document.getElementById('totalCount').textContent = totalCount;
+                document.getElementById('lastUpdate').textContent = formatDate(lastUpdate, true);
+
+                // Parse articles
+                const articleNodes = xmlDoc.querySelectorAll('article');
+                allArticles = Array.from(articleNodes).map(article => ({
+                    id: article.querySelector('id')?.textContent || '',
+                    title: article.querySelector('title')?.textContent || '',
+                    url: article.querySelector('url')?.textContent || '',
+                    scrapedAt: article.querySelector('scraped_at')?.textContent || ''
+                }));
+
+                filteredArticles = [...allArticles];
+                displayArticles();
+            } catch (error) {
+                console.error('Error loading articles:', error);
+                document.getElementById('content').innerHTML = `
+                    <div class="error">
+                        <h2>❌ Error Loading Articles</h2>
+                        <p>Could not load articles.xml. Make sure the file exists and is valid XML.</p>
+                        <p>Error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Display articles
+        function displayArticles() {
+            const content = document.getElementById('content');
+            document.getElementById('displayedCount').textContent = filteredArticles.length;
+
+            if (filteredArticles.length === 0) {
+                content.innerHTML = `
+                    <div class="no-results">
+                        <h2>😔 কোনো নিবন্ধ পাওয়া যায়নি</h2>
+                        <p>No articles found matching your criteria.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const grid = document.createElement('div');
+            grid.className = 'articles-grid';
+
+            filteredArticles.forEach(article => {
+                const card = document.createElement('div');
+                card.className = 'article-card';
+                card.innerHTML = `
+                    <a href="${article.url}" target="_blank" class="title">${article.title}</a>
+                    <div class="meta">
+                        <span class="date">📅 ${formatDate(article.scrapedAt)}</span>
+                        <a href="${article.url}" target="_blank" class="link-btn">পড়ুন →</a>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            content.innerHTML = '';
+            content.appendChild(grid);
+        }
+
+        // Format date
+        function formatDate(dateString, shortFormat = false) {
+            if (!dateString) return '-';
+            
+            try {
+                const date = new Date(dateString);
+                
+                if (shortFormat) {
+                    return date.toLocaleDateString('bn-BD', {
+                        day: 'numeric',
+                        month: 'short'
+                    });
+                }
+                
+                return date.toLocaleDateString('bn-BD', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        // Search functionality
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            
+            if (searchTerm === '') {
+                filteredArticles = filterByDate(allArticles);
+            } else {
+                const dateFiltered = filterByDate(allArticles);
+                filteredArticles = dateFiltered.filter(article =>
+                    article.title.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            displayArticles();
+        });
+
+        // Filter by date
+        function filterByDate(articles) {
+            if (currentFilter === 'all') return articles;
+
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+            return articles.filter(article => {
+                const articleDate = new Date(article.scrapedAt);
+                
+                switch (currentFilter) {
+                    case 'today':
+                        return articleDate >= today;
+                    case 'week':
+                        return articleDate >= weekAgo;
+                    case 'month':
+                        return articleDate >= monthAgo;
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        // Filter button handlers
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Update active state
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // Apply filter
+                currentFilter = btn.dataset.filter;
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+                
+                if (searchTerm === '') {
+                    filteredArticles = filterByDate(allArticles);
+                } else {
+                    const dateFiltered = filterByDate(allArticles);
+                    filteredArticles = dateFiltered.filter(article =>
+                        article.title.toLowerCase().includes(searchTerm)
+                    );
+                }
+                
+                displayArticles();
+            });
+        });
+
+        // Load articles on page load
+        loadArticles();
+
+        // Refresh every 5 minutes
+        setInterval(loadArticles, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
