@@ -13,7 +13,7 @@ FLARESOLVERR_URL = "http://localhost:8191/v1"
 
 # Button Clicking Configuration
 CLICK_LOAD_MORE = True
-LOAD_MORE_BUTTON_TEXT = "আরও দেখুন"
+LOAD_MORE_BUTTON_TEXT = "আরও"
 WAIT_AFTER_CLICK = 2  # seconds to wait after clicking each button
 
 # Storage Configuration
