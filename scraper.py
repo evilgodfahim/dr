@@ -26,7 +26,6 @@ try:
         LOAD_MORE_BUTTON_TEXT, WAIT_AFTER_CLICK
     )
 except ImportError:
-    # Fallback to defaults if config.py not found
     URL = "https://www.deshrupantor.com/printversion"
     SELECTOR = ".each .title .link_overlay"
     MAX_ARTICLES = 500
@@ -38,58 +37,52 @@ except ImportError:
     USE_FLARESOLVERR = True
     FLARESOLVERR_URL = "http://localhost:8191/v1"
     CLICK_LOAD_MORE = True
-    # changed default button text to match exact "আরও"
     LOAD_MORE_BUTTON_TEXT = "আরও"
     WAIT_AFTER_CLICK = 5
+
+# Opinion section config
+OPINION_URL = "https://www.deshrupantor.com/topic/%E0%A6%9A%E0%A6%BF%E0%A6%A8%E0%A7%8D%E0%A6%A4%E0%A6%BE"
+OPINION_SELECTOR = ".tag_title_holder h2.title a.link_overlay"
+OPINION_XML_FILE = "opinion.xml"
 
 # Setup logging
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
     format=LOG_FORMAT,
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger(__name__)
 
 
-def generate_article_id(title, url):
+def generate_article_id(url):
     """Generate unique ID for article based on URL"""
-    unique_string = f"{url}"
-    return hashlib.md5(unique_string.encode()).hexdigest()
+    return hashlib.md5(url.encode()).hexdigest()
 
 
 def fetch_with_flaresolverr(url):
     """Fetch URL using FlareSolverr to bypass Cloudflare"""
     logger.info(f"Fetching via FlareSolverr: {url}")
-
     try:
         payload = {
             "cmd": "request.get",
             "url": url,
-            "maxTimeout": REQUEST_TIMEOUT * 1000,  # Convert to milliseconds
+            "maxTimeout": REQUEST_TIMEOUT * 1000,
             "returnRawHtml": True
         }
-
         response = requests.post(
             FLARESOLVERR_URL,
             json=payload,
             timeout=REQUEST_TIMEOUT + 10
         )
         response.raise_for_status()
-
         data = response.json()
-
         if data.get('status') == 'ok':
-            solution = data.get('solution', {})
-            html = solution.get('response', '')
+            html = data.get('solution', {}).get('response', '')
             logger.info("Successfully fetched via FlareSolverr")
             return html
         else:
-            error_msg = data.get('message', 'Unknown error')
-            logger.error(f"FlareSolverr error: {error_msg}")
+            logger.error(f"FlareSolverr error: {data.get('message', 'Unknown error')}")
             return None
-
     except requests.RequestException as e:
         logger.error(f"FlareSolverr request failed: {e}")
         return None
@@ -104,9 +97,7 @@ def fetch_with_selenium_and_click(url):
         return fetch_with_flaresolverr(url)
 
     logger.info(f"Fetching with button click via FlareSolverr: {url}")
-
     try:
-        # First, get the page and create session
         payload = {
             "cmd": "request.get",
             "url": url,
@@ -114,31 +105,25 @@ def fetch_with_selenium_and_click(url):
             "returnRawHtml": True,
             "session": "scraper_session"
         }
-
         response = requests.post(
             FLARESOLVERR_URL,
             json=payload,
             timeout=REQUEST_TIMEOUT + 10
         )
         response.raise_for_status()
-
         data = response.json()
 
         if data.get('status') != 'ok':
             logger.error(f"FlareSolverr initial fetch failed: {data.get('message')}")
             return None
 
-        # Click all buttons whose trimmed text equals the configured label (exact match)
         logger.info(f"Searching for '{LOAD_MORE_BUTTON_TEXT}' buttons...")
-
-        # Use JavaScript to find and click all buttons that exactly match the text
         click_all_script = f"""
         (function() {{
-            const buttons = Array.from(document.querySelectorAll('a, button')).filter(el => 
+            const buttons = Array.from(document.querySelectorAll('a, button')).filter(el =>
                 el.textContent && el.textContent.trim() === '{LOAD_MORE_BUTTON_TEXT}'
             );
             console.log('Found ' + buttons.length + ' buttons');
-            
             async function clickAll() {{
                 for (let i = 0; i < buttons.length; i++) {{
                     console.log('Clicking button ' + (i+1) + '/' + buttons.length);
@@ -146,7 +131,6 @@ def fetch_with_selenium_and_click(url):
                     await new Promise(resolve => setTimeout(resolve, {WAIT_AFTER_CLICK * 1000}));
                 }}
             }}
-            
             return (async function() {{
                 await clickAll();
                 return buttons.length;
@@ -167,20 +151,16 @@ def fetch_with_selenium_and_click(url):
                 json=execute_payload,
                 timeout=REQUEST_TIMEOUT + 40
             )
-
             if exec_response.status_code == 200:
                 exec_data = exec_response.json()
                 button_count = exec_data.get('solution', {}).get('result', 0)
-                logger.info(f"Clicked {button_count} '{LOAD_MORE_BUTTON_TEXT}' buttons, waiting for content to load...")
-                # Wait additional time for all content to load
+                logger.info(f"Clicked {button_count} '{LOAD_MORE_BUTTON_TEXT}' buttons, waiting for content...")
                 time.sleep(WAIT_AFTER_CLICK)
             else:
                 logger.warning("Button clicking may have failed, continuing anyway...")
-
         except Exception as e:
             logger.warning(f"Could not execute button clicks: {e}, continuing with initial page...")
 
-        # Get the final HTML after all clicks
         final_payload = {
             "cmd": "request.get",
             "url": url,
@@ -188,18 +168,14 @@ def fetch_with_selenium_and_click(url):
             "maxTimeout": REQUEST_TIMEOUT * 1000,
             "returnRawHtml": True
         }
-
         final_response = requests.post(
             FLARESOLVERR_URL,
             json=final_payload,
             timeout=REQUEST_TIMEOUT + 10
         )
-
         if final_response.status_code == 200:
-            final_data = final_response.json()
-            html = final_data.get('solution', {}).get('response', '')
+            html = final_response.json().get('solution', {}).get('response', '')
         else:
-            # Fallback to initial HTML
             html = data.get('solution', {}).get('response', '')
 
         logger.info("Successfully fetched page content with expanded sections")
@@ -218,7 +194,6 @@ def fetch_html(url):
     if USE_FLARESOLVERR:
         return fetch_with_selenium_and_click(url)
     else:
-        # Regular requests without FlareSolverr
         try:
             headers = {'User-Agent': USER_AGENT}
             response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
@@ -230,63 +205,52 @@ def fetch_html(url):
             return None
 
 
-def fetch_articles():
-    """Fetch articles from the website"""
-    logger.info(f"Fetching articles from {URL}")
-
+def fetch_articles(url, selector, base_url="https://www.deshrupantor.com"):
+    """Fetch articles from a given URL using a CSS selector"""
+    logger.info(f"Fetching articles from {url}")
     try:
-        html = fetch_html(URL)
-
+        html = fetch_html(url)
         if not html:
             logger.error("Failed to fetch HTML content")
             return []
 
         soup = BeautifulSoup(html, 'html.parser')
-
-        # Find all article links using the selector
-        article_elements = soup.select(SELECTOR)
+        article_elements = soup.select(selector)
 
         articles = []
         for element in article_elements:
             title = element.get('title', '').strip()
-            url = element.get('href', '').strip()
+            href = element.get('href', '').strip()
 
-            # Make URL absolute if relative
-            if url.startswith('//'):
-                url = 'https:' + url
-            elif url.startswith('/'):
-                url = 'https://www.deshrupantor.com' + url
+            if href.startswith('//'):
+                href = 'https:' + href
+            elif href.startswith('/'):
+                href = base_url + href
 
-            if title and url:
-                article_id = generate_article_id(title, url)
+            if title and href:
                 articles.append({
-                    'id': article_id,
+                    'id': generate_article_id(href),
                     'title': title,
-                    'url': url,
+                    'url': href,
                     'scraped_at': datetime.now().isoformat()
                 })
 
         logger.info(f"Found {len(articles)} articles")
         return articles
 
-    except requests.RequestException as e:
-        logger.error(f"Error fetching articles: {e}")
-        return []
     except Exception as e:
-        logger.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error fetching articles: {e}")
         return []
 
 
-def load_existing_articles():
+def load_existing_articles(xml_file):
     """Load existing articles from XML file"""
-    if not os.path.exists(XML_FILE):
-        logger.info("No existing XML file found, creating new one")
+    if not os.path.exists(xml_file):
+        logger.info(f"No existing {xml_file} found, creating new one")
         return {}
-
     try:
-        tree = ET.parse(XML_FILE)
+        tree = ET.parse(xml_file)
         root = tree.getroot()
-
         existing = {}
         for article in root.findall('article'):
             article_id = article.find('id').text
@@ -296,119 +260,88 @@ def load_existing_articles():
                 'url': article.find('url').text,
                 'scraped_at': article.find('scraped_at').text
             }
-
-        logger.info(f"Loaded {len(existing)} existing articles")
+        logger.info(f"Loaded {len(existing)} existing articles from {xml_file}")
         return existing
-
     except ET.ParseError as e:
-        logger.error(f"Error parsing XML file: {e}")
-        logger.info("Creating backup and starting fresh")
-        if os.path.exists(XML_FILE):
-            os.rename(XML_FILE, f"{XML_FILE}.backup")
+        logger.error(f"Error parsing {xml_file}: {e}")
+        if os.path.exists(xml_file):
+            os.rename(xml_file, f"{xml_file}.backup")
         return {}
     except Exception as e:
-        logger.error(f"Unexpected error loading XML: {e}")
+        logger.error(f"Unexpected error loading {xml_file}: {e}")
         return {}
 
 
-def save_articles_to_xml(articles_dict):
+def save_articles_to_xml(articles_dict, xml_file):
     """Save articles to XML file"""
-    logger.info(f"Saving {len(articles_dict)} articles to XML")
-
+    logger.info(f"Saving {len(articles_dict)} articles to {xml_file}")
     try:
-        # Create root element
         root = ET.Element('articles')
         root.set('last_updated', datetime.now().isoformat())
         root.set('total_count', str(len(articles_dict)))
 
-        # Sort by scraped_at (newest first)
         sorted_articles = sorted(
             articles_dict.values(),
             key=lambda x: x['scraped_at'],
             reverse=True
         )
 
-        # Add articles
         for article in sorted_articles:
             article_elem = ET.SubElement(root, 'article')
+            ET.SubElement(article_elem, 'id').text = article['id']
+            ET.SubElement(article_elem, 'title').text = article['title']
+            ET.SubElement(article_elem, 'url').text = article['url']
+            ET.SubElement(article_elem, 'scraped_at').text = article['scraped_at']
 
-            id_elem = ET.SubElement(article_elem, 'id')
-            id_elem.text = article['id']
+        xml_string = minidom.parseString(
+            ET.tostring(root, encoding='utf-8')
+        ).toprettyxml(indent="  ", encoding='utf-8')
 
-            title_elem = ET.SubElement(article_elem, 'title')
-            title_elem.text = article['title']
-
-            url_elem = ET.SubElement(article_elem, 'url')
-            url_elem.text = article['url']
-
-            scraped_elem = ET.SubElement(article_elem, 'scraped_at')
-            scraped_elem.text = article['scraped_at']
-
-        # Pretty print XML
-        xml_string = minidom.parseString(ET.tostring(root, encoding='utf-8')).toprettyxml(
-            indent="  ",
-            encoding='utf-8'
-        )
-
-        # Write to file
-        with open(XML_FILE, 'wb') as f:
+        with open(xml_file, 'wb') as f:
             f.write(xml_string)
 
-        logger.info(f"Successfully saved articles to {XML_FILE}")
+        logger.info(f"Successfully saved to {xml_file}")
         return True
-
     except Exception as e:
-        logger.error(f"Error saving XML file: {e}")
+        logger.error(f"Error saving {xml_file}: {e}")
         return False
 
 
-def update_articles():
-    """Main function to update articles"""
+def update_articles(url, selector, xml_file, max_articles=MAX_ARTICLES):
+    """Fetch, merge, and save articles for a single source"""
     logger.info("=" * 50)
-    logger.info("Starting article update")
+    logger.info(f"Updating: {xml_file} <- {url}")
     logger.info("=" * 50)
 
-    # Fetch new articles
-    new_articles = fetch_articles()
-
+    new_articles = fetch_articles(url, selector)
     if not new_articles:
         logger.warning("No articles fetched, skipping update")
         return False
 
-    # Load existing articles
-    existing_articles = load_existing_articles()
+    existing_articles = load_existing_articles(xml_file)
 
-    # Merge new and existing articles
     added_count = 0
     for article in new_articles:
         if article['id'] not in existing_articles:
             existing_articles[article['id']] = article
             added_count += 1
         else:
-            # Update scraped_at for existing articles
             existing_articles[article['id']]['scraped_at'] = article['scraped_at']
 
     logger.info(f"Added {added_count} new articles")
 
-    # Limit to MAX_ARTICLES (keep newest)
-    if len(existing_articles) > MAX_ARTICLES:
+    if len(existing_articles) > max_articles:
         sorted_articles = sorted(
             existing_articles.values(),
             key=lambda x: x['scraped_at'],
             reverse=True
         )
-        existing_articles = {
-            article['id']: article 
-            for article in sorted_articles[:MAX_ARTICLES]
-        }
-        logger.info(f"Trimmed to {MAX_ARTICLES} articles")
+        existing_articles = {a['id']: a for a in sorted_articles[:max_articles]}
+        logger.info(f"Trimmed to {max_articles} articles")
 
-    # Save to XML
-    success = save_articles_to_xml(existing_articles)
-
+    success = save_articles_to_xml(existing_articles, xml_file)
     if success:
-        logger.info("Update completed successfully")
-        logger.info(f"Total articles in XML: {len(existing_articles)}")
+        logger.info(f"Update complete. Total in {xml_file}: {len(existing_articles)}")
     else:
         logger.error("Update failed")
 
@@ -418,7 +351,12 @@ def update_articles():
 
 if __name__ == "__main__":
     try:
-        update_articles()
+        # Main printversion scrape -> articles.xml
+        update_articles(URL, SELECTOR, XML_FILE)
+
+        # Opinion topic scrape -> opinion.xml
+        update_articles(OPINION_URL, OPINION_SELECTOR, OPINION_XML_FILE)
+
     except KeyboardInterrupt:
         logger.info("\nScript interrupted by user")
         sys.exit(0)
