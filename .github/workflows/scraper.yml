@@ -71,7 +71,7 @@ jobs:
     
     - name: Commit and push if changed
       run: |
-        git add articles.xml
+        git add *.xml
         if git diff --staged --quiet; then
           echo "No changes to commit"
         else
