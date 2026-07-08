@@ -27,11 +27,11 @@ docker-compose up -d
 **Option B: Docker Run**
 ```bash
 docker run -d \
-  --name flaresolverr \
+  --name byparr \
   -p 8191:8191 \
   -e LOG_LEVEL=info \
   -e TZ=Asia/Dhaka \
-  ghcr.io/flaresolverr/flaresolverr:latest
+  ghcr.io/thephaseless/byparr:latest
 ```
 
 **Verify FlareSolverr is running:**
@@ -283,7 +283,7 @@ pip install --upgrade -r requirements.txt
 ### Update FlareSolverr
 
 ```bash
-docker pull ghcr.io/flaresolverr/flaresolverr:latest
+docker pull ghcr.io/thephaseless/byparr:latest
 docker-compose down
 docker-compose up -d
 ```
