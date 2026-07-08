@@ -37,9 +37,9 @@ cd deshrupantor-scraper
 
 # Start FlareSolverr manually
 docker run -d \
-  --name flaresolverr \
+  --name byparr \
   -p 8191:8191 \
-  ghcr.io/flaresolverr/flaresolverr:latest
+  ghcr.io/thephaseless/byparr:latest
 
 # Install dependencies
 pip install -r requirements.txt
