@@ -64,10 +64,10 @@ docker-compose up -d
 **Option B: Using Docker directly**
 ```bash
 docker run -d \
-  --name flaresolverr \
+  --name byparr \
   -p 8191:8191 \
   -e LOG_LEVEL=info \
-  ghcr.io/flaresolverr/flaresolverr:latest
+  ghcr.io/thephaseless/byparr:latest
 ```
 
 4. Run the scraper:
