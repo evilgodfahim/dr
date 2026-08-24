@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Deshrupantor News Scraper with FlareSolverr
-Scrapes articles from deshrupantor.com and saves them to XML
+Scrapes articles from deshrupantor.com and saves them as RSS 2.0 feeds
 Supports Cloudflare bypass via FlareSolverr
 """
 
@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+from email.utils import formatdate, parsedate_to_datetime
 import os
 import hashlib
 from datetime import datetime
@@ -54,10 +55,35 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 def generate_article_id(url):
     """Generate unique ID for article based on URL"""
     return hashlib.md5(url.encode()).hexdigest()
 
+
+def to_rfc2822(iso_str):
+    """Convert an ISO 8601 string to RFC 2822 format used in RSS <pubDate>."""
+    try:
+        dt = datetime.fromisoformat(iso_str)
+        return formatdate(dt.timestamp(), usegmt=True)
+    except Exception:
+        return formatdate(usegmt=True)
+
+
+def from_rfc2822(rfc_str):
+    """Parse an RFC 2822 date string back to ISO 8601 for internal sorting/storage."""
+    try:
+        return parsedate_to_datetime(rfc_str).isoformat()
+    except Exception:
+        return datetime.now().isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Fetch layer (unchanged)
+# ---------------------------------------------------------------------------
 
 def fetch_with_flaresolverr(url):
     """Fetch URL using FlareSolverr to bypass Cloudflare"""
@@ -232,7 +258,7 @@ def fetch_articles(url, selector, base_url="https://www.deshrupantor.com"):
                     'id': generate_article_id(href),
                     'title': title,
                     'url': href,
-                    'scraped_at': datetime.now().isoformat()
+                    'scraped_at': datetime.now().isoformat()  # ISO internally
                 })
 
         logger.info(f"Found {len(articles)} articles")
@@ -243,25 +269,71 @@ def fetch_articles(url, selector, base_url="https://www.deshrupantor.com"):
         return []
 
 
+# ---------------------------------------------------------------------------
+# RSS 2.0 persistence
+# ---------------------------------------------------------------------------
+
 def load_existing_articles(xml_file):
-    """Load existing articles from XML file"""
+    """Load existing articles from an RSS 2.0 XML file.
+
+    Falls back gracefully to the old custom <articles>/<article> format so
+    existing files aren't lost on first run after upgrading.
+    """
     if not os.path.exists(xml_file):
-        logger.info(f"No existing {xml_file} found, creating new one")
+        logger.info(f"No existing {xml_file} found, will create new one")
         return {}
     try:
         tree = ET.parse(xml_file)
         root = tree.getroot()
         existing = {}
-        for article in root.findall('article'):
-            article_id = article.find('id').text
-            existing[article_id] = {
-                'id': article_id,
-                'title': article.find('title').text,
-                'url': article.find('url').text,
-                'scraped_at': article.find('scraped_at').text
-            }
+
+        if root.tag == 'rss':
+            # --- RSS 2.0 format ---
+            channel = root.find('channel')
+            items = channel.findall('item') if channel is not None else []
+            for item in items:
+                guid_elem = item.find('guid')
+                url = (guid_elem.text or '').strip() if guid_elem is not None else ''
+                if not url:
+                    link_elem = item.find('link')
+                    url = (link_elem.text or '').strip() if link_elem is not None else ''
+
+                title_elem = item.find('title')
+                title = (title_elem.text or '').strip() if title_elem is not None else ''
+
+                pub_date_elem = item.find('pubDate')
+                # Convert RFC 2822 → ISO for internal sorting
+                scraped_at = (
+                    from_rfc2822(pub_date_elem.text)
+                    if pub_date_elem is not None and pub_date_elem.text
+                    else datetime.now().isoformat()
+                )
+
+                if url:
+                    article_id = generate_article_id(url)
+                    existing[article_id] = {
+                        'id': article_id,
+                        'title': title,
+                        'url': url,
+                        'scraped_at': scraped_at,
+                    }
+        else:
+            # --- Legacy custom format fallback ---
+            for article in root.findall('article'):
+                article_id = article.find('id').text
+                url_elem = article.find('url')
+                title_elem = article.find('title')
+                scraped_at_elem = article.find('scraped_at')
+                existing[article_id] = {
+                    'id': article_id,
+                    'title': title_elem.text if title_elem is not None else '',
+                    'url': url_elem.text if url_elem is not None else '',
+                    'scraped_at': scraped_at_elem.text if scraped_at_elem is not None else datetime.now().isoformat(),
+                }
+
         logger.info(f"Loaded {len(existing)} existing articles from {xml_file}")
         return existing
+
     except ET.ParseError as e:
         logger.error(f"Error parsing {xml_file}: {e}")
         if os.path.exists(xml_file):
@@ -272,13 +344,19 @@ def load_existing_articles(xml_file):
         return {}
 
 
-def save_articles_to_xml(articles_dict, xml_file):
-    """Save articles to XML file"""
+def save_articles_to_xml(articles_dict, xml_file, feed_title="", feed_link="", feed_description=""):
+    """Save articles as a valid RSS 2.0 feed readable by Inoreader and other readers."""
     logger.info(f"Saving {len(articles_dict)} articles to {xml_file}")
     try:
-        root = ET.Element('articles')
-        root.set('last_updated', datetime.now().isoformat())
-        root.set('total_count', str(len(articles_dict)))
+        root = ET.Element('rss')
+        root.set('version', '2.0')
+
+        channel = ET.SubElement(root, 'channel')
+        ET.SubElement(channel, 'title').text = feed_title
+        ET.SubElement(channel, 'link').text = feed_link
+        ET.SubElement(channel, 'description').text = feed_description
+        ET.SubElement(channel, 'lastBuildDate').text = formatdate(usegmt=True)
+        ET.SubElement(channel, 'generator').text = 'Deshrupantor Scraper'
 
         sorted_articles = sorted(
             articles_dict.values(),
@@ -287,11 +365,14 @@ def save_articles_to_xml(articles_dict, xml_file):
         )
 
         for article in sorted_articles:
-            article_elem = ET.SubElement(root, 'article')
-            ET.SubElement(article_elem, 'id').text = article['id']
-            ET.SubElement(article_elem, 'title').text = article['title']
-            ET.SubElement(article_elem, 'url').text = article['url']
-            ET.SubElement(article_elem, 'scraped_at').text = article['scraped_at']
+            item = ET.SubElement(channel, 'item')
+            ET.SubElement(item, 'title').text = article['title']
+            ET.SubElement(item, 'link').text = article['url']
+            guid = ET.SubElement(item, 'guid')
+            guid.set('isPermaLink', 'true')
+            guid.text = article['url']
+            # Convert ISO → RFC 2822 only at write time
+            ET.SubElement(item, 'pubDate').text = to_rfc2822(article['scraped_at'])
 
         xml_string = minidom.parseString(
             ET.tostring(root, encoding='utf-8')
@@ -307,8 +388,13 @@ def save_articles_to_xml(articles_dict, xml_file):
         return False
 
 
-def update_articles(url, selector, xml_file, max_articles=MAX_ARTICLES):
-    """Fetch, merge, and save articles for a single source"""
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+
+def update_articles(url, selector, xml_file, max_articles=MAX_ARTICLES,
+                    feed_title="", feed_description=""):
+    """Fetch, merge, trim, and save articles for a single source."""
     logger.info("=" * 50)
     logger.info(f"Updating: {xml_file} <- {url}")
     logger.info("=" * 50)
@@ -339,7 +425,12 @@ def update_articles(url, selector, xml_file, max_articles=MAX_ARTICLES):
         existing_articles = {a['id']: a for a in sorted_articles[:max_articles]}
         logger.info(f"Trimmed to {max_articles} articles")
 
-    success = save_articles_to_xml(existing_articles, xml_file)
+    success = save_articles_to_xml(
+        existing_articles, xml_file,
+        feed_title=feed_title,
+        feed_link=url,
+        feed_description=feed_description,
+    )
     if success:
         logger.info(f"Update complete. Total in {xml_file}: {len(existing_articles)}")
     else:
@@ -351,12 +442,16 @@ def update_articles(url, selector, xml_file, max_articles=MAX_ARTICLES):
 
 if __name__ == "__main__":
     try:
-        # Main printversion scrape -> articles.xml
-        update_articles(URL, SELECTOR, XML_FILE)
-
-        # Opinion topic scrape -> opinion.xml
-        update_articles(OPINION_URL, OPINION_SELECTOR, OPINION_XML_FILE)
-
+        update_articles(
+            URL, SELECTOR, XML_FILE,
+            feed_title="Deshrupantor - Print Version",
+            feed_description="Print edition articles from Deshrupantor",
+        )
+        update_articles(
+            OPINION_URL, OPINION_SELECTOR, OPINION_XML_FILE,
+            feed_title="Deshrupantor - Opinion",
+            feed_description="Opinion articles from Deshrupantor",
+        )
     except KeyboardInterrupt:
         logger.info("\nScript interrupted by user")
         sys.exit(0)
